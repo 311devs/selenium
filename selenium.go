@@ -378,9 +378,12 @@ type WebElement interface {
 	Submit() error
 	// Clear clears the element.
 	Clear() error
-	// MoveTo moves the mouse to relative coordinates from center of element, If
+	// MoveTo moves the mouse to relative coordinates from top left corner of element. If
 	// the element is not visible, it will be scrolled into view.
 	MoveTo(xOffset, yOffset int) error
+	// MoveTo moves the mouse to center of of element. If
+	// the element is not visible, it will be scrolled into view.
+	MoveToCenter() error
 
 	// FindElement finds a child element.
 	FindElement(by, value string) (WebElement, error)
