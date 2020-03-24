@@ -338,6 +338,8 @@ type WebDriver interface {
 	// NOTE: will return an error (not implemented) on IE11 or Edge drivers.
 	Log(typ log.Type) ([]log.Message, error)
 
+	ScreenshotFullPage() ([]byte, error)
+
 	// DismissAlert dismisses current alert.
 	DismissAlert() error
 	// AcceptAlert accepts the current alert.

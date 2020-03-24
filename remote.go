@@ -1184,6 +1184,101 @@ func (wd *remoteWD) Screenshot() ([]byte, error) {
 	return ioutil.ReadAll(decoder)
 }
 
+func (wd *remoteWD) devSendAndGetResult(cmd string, params interface{}) (json.RawMessage, error) {
+	cmdBody, err := json.Marshal(struct {
+		Cmd    string      `json:"cmd"`
+		Params interface{} `json:"params"`
+	}{
+		Cmd:    cmd,
+		Params: params,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	url := wd.requestURL("/session/%s/chromium/send_command_and_get_result", wd.id)
+	return wd.execute("POST", url, cmdBody)
+}
+
+// ScreenshotFullPage get screenshot with chrome DevTools api
+// see https://stackoverflow.com/a/45201692
+func (wd *remoteWD) ScreenshotFullPage() ([]byte, error) {
+
+	response, err := wd.devSendAndGetResult(
+		"Runtime.evaluate",
+		map[string]interface{}{
+			"returnByValue": true,
+			"expression": `({
+	width: Math.max(window.innerWidth, document.body.scrollWidth, document.documentElement.scrollWidth)|0,
+	height: Math.max(innerHeight, document.body.scrollHeight, document.documentElement.scrollHeight)|0,
+deviceScaleFactor: window.devicePixelRatio || 1, mobile: typeof window.orientation !== 'undefined'
+});`})
+
+	if err != nil {
+		return nil, err
+	}
+
+	var evalResult struct {
+		SessionID string `json:"sessionId"`
+		Status    int    `json:"status"`
+		Value     struct {
+			Result struct {
+				Type  string                 `json:"type"`
+				Value map[string]interface{} `json:"value"`
+			} `json:"result"`
+		} `json:"value"`
+	}
+
+	if err := json.Unmarshal(response, &evalResult); err != nil {
+		return nil, err
+	}
+
+	_, err = wd.devSendAndGetResult(
+		"Emulation.setDeviceMetricsOverride",
+		evalResult.Value.Result.Value,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	screenshotResult, err := wd.devSendAndGetResult(
+		"Page.captureScreenshot",
+		map[string]interface{}{
+			"format":      "png",
+			"fromSurface": true,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var screenshotData struct {
+		Value struct {
+			Data string `json:"data"`
+		} `json:"value"`
+	}
+	if err := json.Unmarshal(screenshotResult, &screenshotData); err != nil {
+		return nil, err
+	}
+
+	if _, err := wd.devSendAndGetResult(
+		"Emulation.clearDeviceMetricsOverride",
+		map[string]interface{}{},
+	); err != nil {
+		return nil, err
+	}
+
+	buf := []byte(screenshotData.Value.Data)
+
+	decoder := base64.NewDecoder(base64.StdEncoding, bytes.NewBuffer(buf))
+	screenshot, err := ioutil.ReadAll(decoder)
+	if err != nil {
+		return nil, err
+	}
+
+	return screenshot, nil
+}
+
 // Condition is an alias for a type that is passed as an argument
 // for selenium.Wait(cond Condition) (error) function.
 type Condition func(wd WebDriver) (bool, error)
