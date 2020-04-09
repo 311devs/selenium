@@ -337,9 +337,14 @@ type WebDriver interface {
 	//
 	// NOTE: will return an error (not implemented) on IE11 or Edge drivers.
 	Log(typ log.Type) ([]log.Message, error)
+	// SetDeviceMetricsFullPage overrides web driver device metrics for full page
+	SetDeviceMetricsFullPage() error
+	// ClearDeviceMetricsOverride clears web driver overrided device metrics
+	ClearDeviceMetricsOverride() error
 
 	ScreenshotFullPage() ([]byte, error)
 
+	ScreenshotElement(WebElement) ([]byte, error)
 	// DismissAlert dismisses current alert.
 	DismissAlert() error
 	// AcceptAlert accepts the current alert.
@@ -416,4 +421,6 @@ type WebElement interface {
 	CSSProperty(name string) (string, error)
 	// Screenshot takes a screenshot of the attribute scroll'ing if necessary.
 	Screenshot(scroll bool) ([]byte, error)
+	// LocationAndSize returns the element's location and size
+	LocationAndSize() (*Point, *Size, error)
 }

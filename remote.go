@@ -1200,10 +1200,7 @@ func (wd *remoteWD) devSendAndGetResult(cmd string, params interface{}) (json.Ra
 	return wd.execute("POST", url, cmdBody)
 }
 
-// ScreenshotFullPage get screenshot with chrome DevTools api
-// see https://stackoverflow.com/a/45201692
-func (wd *remoteWD) ScreenshotFullPage() ([]byte, error) {
-
+func (wd *remoteWD) SetDeviceMetricsFullPage() error {
 	response, err := wd.devSendAndGetResult(
 		"Runtime.evaluate",
 		map[string]interface{}{
@@ -1215,7 +1212,7 @@ deviceScaleFactor: window.devicePixelRatio || 1, mobile: typeof window.orientati
 });`})
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	var evalResult struct {
@@ -1230,23 +1227,29 @@ deviceScaleFactor: window.devicePixelRatio || 1, mobile: typeof window.orientati
 	}
 
 	if err := json.Unmarshal(response, &evalResult); err != nil {
-		return nil, err
+		return err
 	}
 
 	_, err = wd.devSendAndGetResult(
 		"Emulation.setDeviceMetricsOverride",
 		evalResult.Value.Result.Value,
 	)
-	if err != nil {
-		return nil, err
-	}
+	return err
+}
+
+func (wd *remoteWD) ClearDeviceMetricsOverride() error {
+	_, err := wd.devSendAndGetResult(
+		"Emulation.clearDeviceMetricsOverride",
+		map[string]interface{}{},
+	)
+	return err
+}
+
+func (wd *remoteWD) takeScreenshot(captureParams map[string]interface{}) ([]byte, error) {
 
 	screenshotResult, err := wd.devSendAndGetResult(
 		"Page.captureScreenshot",
-		map[string]interface{}{
-			"format":      "png",
-			"fromSurface": true,
-		},
+		captureParams,
 	)
 	if err != nil {
 		return nil, err
@@ -1261,13 +1264,6 @@ deviceScaleFactor: window.devicePixelRatio || 1, mobile: typeof window.orientati
 		return nil, err
 	}
 
-	if _, err := wd.devSendAndGetResult(
-		"Emulation.clearDeviceMetricsOverride",
-		map[string]interface{}{},
-	); err != nil {
-		return nil, err
-	}
-
 	buf := []byte(screenshotData.Value.Data)
 
 	decoder := base64.NewDecoder(base64.StdEncoding, bytes.NewBuffer(buf))
@@ -1277,6 +1273,46 @@ deviceScaleFactor: window.devicePixelRatio || 1, mobile: typeof window.orientati
 	}
 
 	return screenshot, nil
+}
+
+// ScreenshotFullPage get screenshot with chrome DevTools api
+// see https://stackoverflow.com/a/45201692
+func (wd *remoteWD) ScreenshotFullPage() ([]byte, error) {
+	if err := wd.SetDeviceMetricsFullPage(); err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		_ = wd.ClearDeviceMetricsOverride()
+	}()
+
+	screenshot, err := wd.takeScreenshot(map[string]interface{}{
+		"format":      "png",
+		"fromSurface": true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return screenshot, nil
+}
+
+func (wd *remoteWD) ScreenshotElement(el WebElement) ([]byte, error) {
+	point, size, err := el.LocationAndSize()
+	if err != nil {
+		return nil, err
+	}
+	return wd.takeScreenshot(map[string]interface{}{
+		"format":      "png",
+		"fromSurface": true,
+		"clip": map[string]interface{}{
+			"x":      point.X,
+			"y":      point.Y,
+			"width":  size.Width,
+			"height": size.Height,
+			"scale":  1,
+		},
+	})
 }
 
 // Condition is an alias for a type that is passed as an argument
@@ -1552,6 +1588,14 @@ func (elem *remoteWE) rect() (*rect, error) {
 		return nil, err
 	}
 	return &r.Value, nil
+}
+
+func (elem *remoteWE) LocationAndSize() (*Point, *Size, error) {
+	rect, err := elem.rect()
+	if err != nil {
+		return nil, nil, err
+	}
+	return &Point{X: int(rect.X), Y: int(rect.Y)}, &Size{Width: int(rect.Width), Height: int(rect.Height)}, nil
 }
 
 func (elem *remoteWE) CSSProperty(name string) (string, error) {
