@@ -342,7 +342,7 @@ type WebDriver interface {
 	// ClearDeviceMetricsOverride clears web driver overrided device metrics
 	ClearDeviceMetricsOverride() error
 
-	ScreenshotFullPage() ([]byte, error)
+	ScreenshotFullPage(ScreenshotOptions) ([]byte, error)
 
 	ScreenshotElement(WebElement) ([]byte, error)
 	// DismissAlert dismisses current alert.
