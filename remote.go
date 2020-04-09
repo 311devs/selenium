@@ -1275,9 +1275,15 @@ func (wd *remoteWD) takeScreenshot(captureParams map[string]interface{}) ([]byte
 	return screenshot, nil
 }
 
+// https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-captureScreenshot
+type ScreenshotOptions struct {
+	Quality uint8 // 0...100 (jpeg only)
+	Format  string
+}
+
 // ScreenshotFullPage get screenshot with chrome DevTools api
 // see https://stackoverflow.com/a/45201692
-func (wd *remoteWD) ScreenshotFullPage() ([]byte, error) {
+func (wd *remoteWD) ScreenshotFullPage(opts ScreenshotOptions) ([]byte, error) {
 	if err := wd.SetDeviceMetricsFullPage(); err != nil {
 		return nil, err
 	}
@@ -1286,10 +1292,26 @@ func (wd *remoteWD) ScreenshotFullPage() ([]byte, error) {
 		_ = wd.ClearDeviceMetricsOverride()
 	}()
 
-	screenshot, err := wd.takeScreenshot(map[string]interface{}{
-		"format":      "png",
+	if opts.Format == "" {
+		opts.Format = "png"
+	}
+	if opts.Format != "jpeg" && opts.Quality != 0 {
+		return nil, errors.New("quality parameter for a non-jpeg format must be equal to 0")
+	}
+	if opts.Quality > 100 {
+		return nil, errors.New("incorrect value for the Quality attribute, must be in range (0...100)")
+	}
+
+	screenshotParams := map[string]interface{}{
+		"format":      opts.Format,
 		"fromSurface": true,
-	})
+	}
+
+	if opts.Format == "jpeg" {
+		screenshotParams["quality"] = opts.Quality
+	}
+
+	screenshot, err := wd.takeScreenshot(screenshotParams)
 	if err != nil {
 		return nil, err
 	}
