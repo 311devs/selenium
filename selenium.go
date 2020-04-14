@@ -344,7 +344,7 @@ type WebDriver interface {
 
 	ScreenshotFullPage(ScreenshotOptions) ([]byte, error)
 
-	ScreenshotElement(WebElement) ([]byte, error)
+	ScreenshotElement(WebElement, ScreenshotOptions) ([]byte, error)
 	// DismissAlert dismisses current alert.
 	DismissAlert() error
 	// AcceptAlert accepts the current alert.
