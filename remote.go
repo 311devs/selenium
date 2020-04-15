@@ -1277,8 +1277,29 @@ func (wd *remoteWD) takeScreenshot(captureParams map[string]interface{}) ([]byte
 
 // https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-captureScreenshot
 type ScreenshotOptions struct {
-	Quality uint8 // 0...100 (jpeg only)
 	Format  string
+	Quality uint8 // 0...100 (jpeg only)
+}
+
+func (wd *remoteWD) validateScreenshotOptions(opts ScreenshotOptions) error {
+	if opts.Format != "jpeg" && opts.Quality != 0 {
+		return errors.New("quality parameter for a non-jpeg format must be equal to 0")
+	}
+	if opts.Quality > 100 {
+		return errors.New("incorrect value for the Quality attribute, must be in range (0...100)")
+	}
+	return nil
+}
+
+func (wd *remoteWD) getScreenshotParams(opts ScreenshotOptions) map[string]interface{} {
+	screenshotParams := map[string]interface{}{
+		"format":      opts.Format,
+		"fromSurface": true,
+	}
+	if opts.Format == "jpeg" {
+		screenshotParams["quality"] = opts.Quality
+	}
+	return screenshotParams
 }
 
 // ScreenshotFullPage get screenshot with chrome DevTools api
@@ -1295,23 +1316,11 @@ func (wd *remoteWD) ScreenshotFullPage(opts ScreenshotOptions) ([]byte, error) {
 	if opts.Format == "" {
 		opts.Format = "png"
 	}
-	if opts.Format != "jpeg" && opts.Quality != 0 {
-		return nil, errors.New("quality parameter for a non-jpeg format must be equal to 0")
-	}
-	if opts.Quality > 100 {
-		return nil, errors.New("incorrect value for the Quality attribute, must be in range (0...100)")
+	if err := wd.validateScreenshotOptions(opts); err != nil {
+		return nil, err
 	}
 
-	screenshotParams := map[string]interface{}{
-		"format":      opts.Format,
-		"fromSurface": true,
-	}
-
-	if opts.Format == "jpeg" {
-		screenshotParams["quality"] = opts.Quality
-	}
-
-	screenshot, err := wd.takeScreenshot(screenshotParams)
+	screenshot, err := wd.takeScreenshot(wd.getScreenshotParams(opts))
 	if err != nil {
 		return nil, err
 	}
@@ -1319,22 +1328,29 @@ func (wd *remoteWD) ScreenshotFullPage(opts ScreenshotOptions) ([]byte, error) {
 	return screenshot, nil
 }
 
-func (wd *remoteWD) ScreenshotElement(el WebElement) ([]byte, error) {
+func (wd *remoteWD) ScreenshotElement(el WebElement, opts ScreenshotOptions) ([]byte, error) {
 	point, size, err := el.LocationAndSize()
 	if err != nil {
 		return nil, err
 	}
-	return wd.takeScreenshot(map[string]interface{}{
-		"format":      "png",
-		"fromSurface": true,
-		"clip": map[string]interface{}{
-			"x":      point.X,
-			"y":      point.Y,
-			"width":  size.Width,
-			"height": size.Height,
-			"scale":  1,
-		},
-	})
+
+	if opts.Format == "" {
+		opts.Format = "png"
+	}
+	if err := wd.validateScreenshotOptions(opts); err != nil {
+		return nil, err
+	}
+
+	screenshotParams := wd.getScreenshotParams(opts)
+	screenshotParams["clip"] = map[string]interface{}{
+		"x":      point.X,
+		"y":      point.Y,
+		"width":  size.Width,
+		"height": size.Height,
+		"scale":  1,
+	}
+
+	return wd.takeScreenshot(screenshotParams)
 }
 
 // Condition is an alias for a type that is passed as an argument
